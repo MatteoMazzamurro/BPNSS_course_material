@@ -9,7 +9,17 @@ Through this notebook, we will learn the basics of network visualisation in R.
 # Preliminaries
 First of all, we list the packages we will need 
 ```{r list required packages}
-required_packages <- c("igraph", "statnet", "intergraph", "vegan", "tidyverse","ggraph")
+required_packages <- c("igraph", 
+                       "statnet", 
+                       "intergraph", 
+                       #"vegan", 
+                       "tidyverse",
+                       "ggraph",
+                       "ggforce",     # convex hull
+                       "concaveman",  # convex hull
+                       "sf",
+                       "ggmap"
+                       )
 ```
 
 We install the packages that we have not installed yet
@@ -28,8 +38,12 @@ Here, we use the following versions of the packages:
 * statnet:    v2019.6
 * intergraph: v2.0.3
 * vegan:      v2.6.4
-* tidyverse   v2.0.0
-* ggraph      v2.1.0
+* tidyverse:  v2.0.0
+* ggraph:     v2.1.0
+* ggforce:    v0.4.1 
+* concaveman: v1.1.0
+* sf:         v1.0.16
+* ggmap:      v4.0.0
 
 # Data 
 Load the necessary data
@@ -48,6 +62,11 @@ cibola_i <-
   igraph::graph_from_adjacency_matrix(as.matrix(cibola_adj_mat),
                                       mode = "undirected")
 
+# attach info to the graphs
+for (a in colnames(cibola_attr)) {
+  vertex_attr(cibola_i,a) <- cibola_attr[[a]]
+}
+
 # build statnet/network
 cibola_n <- asNetwork(cibola_i)
 ```
@@ -57,9 +76,387 @@ Compare the behaviour of igraph and statnet
 ```{r compare igraph and statnet}
 # plot together basic igraph and statnet
 par(mfrow=c(1,2))
-plot(cibola_i) # more information, less readable
-plot(cibola_n) # less information, more sensible defaults
+plot(cibola_i, main ="Cibola, igraph default") # more information, less readable
+plot(cibola_n, main ="Cibola, statnet default") # less information, more sensible defaults
 ```
 
-Add information on 
+Fairly similar visualisation techniques
+```{r visuals with igraph and statnet}
+# plot them together
+par(mfrow=c(1,2))
+
+# plot igraph
+plot(cibola_i, 
+     vertex.size = igraph::degree(cibola_i),
+     vertex.color = as.factor(cibola_attr$Region),
+     edge.color = "darkgray",
+     vertex.label = NA,
+     main = "Cibola, igraph customised")
+
+# plot statnet
+plot(
+  cibola_n,
+  vertex.cex = sna::degree(cibola_n) / 10,
+  vertex.col = as.factor(cibola_attr$Region),
+  edge.col = "darkgray",
+  main = "Cibola, statnet customised")
+```
+
+# Plots with ggraph
+## Node/Edges
+```{r basic}
+# basic plot
+ggraph(cibola_i) +
+  # add edges
+  geom_edge_link() +
+  # add nodes
+  geom_node_point() +
+  # select theme
+  theme_graph()
+```  
+
+Remark: easy to show only edges/nodes
+```{r only nodes}
+# basic plot
+ggraph(cibola_i) +
+  # add nodes
+  geom_node_point() +
+  # select theme
+  theme_graph()
+```
+
+```{r only edges}
+# basic plot
+ggraph(cibola_i) +
+  # add nodes
+  geom_edge_link() +
+  # select theme
+  theme_graph()
+```
+
+Node and Edge aesthetics can be defined for the whole graph or individually (using aes).
+They can either be attributes or come from external values (e.g., computed using a function)
+```{r size and colour}
+# basic plot
+ggraph(cibola_i) +
+  # add edges
+  geom_edge_link(
+    size = "2",
+    color = "gray"
+  ) +
+  # add nodes
+  geom_node_point(
+    aes(size = igraph::degree(cibola_i),
+        color = Region)
+  ) +
+  # select theme
+  theme_graph()
+```
+
+The links can be represented as straight or curved lines
+```{r shape}
+# basic plot
+ggraph(cibola_i) +
+  # add edges
+  geom_edge_arc(
+    size = "2",
+    color = "gray",
+    linetype = "dashed"
+  ) +
+  # add nodes
+  geom_node_point(
+    aes(size = igraph::degree(cibola_i),
+        color = Region),
+    shape = "square"
+  ) +
+  # select theme
+  theme_graph()
+```
+
+We can add labels
+```{r labels}
+# base graph
+ggraph(cibola_i) +
+  # add links
+  geom_edge_link(
+    color ="gray"
+  ) +
+  # add nodes
+  geom_node_point(
+    aes(size = igraph::degree(cibola_i),
+        color = Region)
+  ) +
+  # add labels
+  geom_node_text(
+    aes(label = name),
+    repel=T
+  ) + 
+  # select theme
+  theme_graph()
+```
+
+We can customise the layout by choosing from existing ones (e.g., circle) or defining our own
+```{r layout circle}
+# Define circular layout
+ggraph(cibola_i, 
+       layout = "circle") +
+  geom_edge_link(
+    color ="gray"
+  ) +
+  geom_node_point(
+    aes(size = igraph::degree(cibola_i),
+        color = Region)
+  ) +
+  geom_node_text(
+    aes(label = name)
+  ) + 
+  # select theme
+  theme_graph()
+```
+
+Alternatively, we can define a layout manually
+```{r layout manual}
+# Create a data frame for the custom layout
+coord_df <- data.frame(
+  name = V(cibola_i)$name,
+  x = V(cibola_i)$x, 
+  y = V(cibola_i)$y)
+
+# Define layout manually
+ggraph(cibola_i, 
+       layout = "manual", 
+       x = coord_df$x,
+       y = coord_df$y) +
+  geom_edge_link(
+    color ="gray"
+  ) +
+  geom_node_point(
+    aes(size = igraph::degree(cibola_i),
+        color = Region)
+  ) +
+  geom_node_text(
+    aes(label = name)
+  ) + 
+  # select theme
+  theme_graph()
+```
+
+It is also possible to define a layout interactively
+```{r layout interactive}
+# uses tkplot in igraph
+tkid <- tkplot(cibola_i) #tkid is the id of the tkplot that will open
+l <- tkplot.getcoords(tkid) # grab the coordinates from tkplot
+
+# plot using igraph
+plot(cibola_i, layout=l)
+
+# plot using ggraph
+ggraph(cibola_i, 
+       layout = "manual",
+       x = l[,1],
+       y = l[,2]) +
+  geom_edge_link(
+    color ="gray"
+  ) +
+  geom_node_point(
+    aes(size = igraph::degree(cibola_i),
+        color = Region)
+  ) +
+  geom_node_text(
+    aes(label = name)
+  ) + 
+  # select theme
+  theme_graph()
+```
+
+## Hulls and maps
+We have seen how the plot function with igraph and statnet allows to visualise a convex hull around nodes to identify them as part of a cluster. The same can be done with ggplot
+```{r hull}
+#library(ggforce)
+#library(concaveman)
+
+# identify the clusters
+grp <- as.factor(cluster_louvain(cibola_i)$membership)
+
+# start graph
+ggraph(cibola_i, layout = "fr") +
+  # add links
+  geom_edge_link(width = 0.2) +
+  # add points
+  geom_node_point(aes(fill = grp),
+                  shape = 21,
+                  size = 5,
+                  alpha = 0.75) +
+  # Create hull around points within group and label
+  geom_mark_hull(
+    aes(
+      x,
+      y,
+      group = grp,
+      fill = grp,
+    ),
+    concavity = 4, # the larger it is the more convex
+    expand = ggplot2::unit(2, "mm"),
+    alpha = 0.25,
+  ) +
+  # define color scheme
+  scale_fill_brewer(palette = "Set2") +
+  theme_graph()
+
+?scale_fill_brewer
+```
+
+## Maps.
+The choice of an appropriate map depends on the scale and what one wants to highlight
+For some cases, a terrain is best. This can be done via stadiamap.
+Annoyingly, then one needs to add nodes and links as points and segments on the map.
+```{r terrain map with stadiamap}
+# need to register stadiamaps beforehand (see tutorial)
+ggmap::register_stadiamaps("72639591-13c1-46a8-b58d-86318dbbe614")
+
+# download stadiamap
+base_cibola <- get_stadiamap(
+  bbox = c(-110.2, 33.4, -107.8, 35.3),
+  zoom = 10,
+  maptype = "stamen_terrain_background",
+  color = "bw"
+)
+
+# Convert attribute location data to sf coordinates and change map projection
+locations_sf <-
+  st_as_sf(coord_df, coords = c("x", "y"), crs = 26912)
+loc_trans <- st_transform(locations_sf, crs = 4326)
+coord_4326_df <- data.frame(name = coord_df$name, st_coordinates(loc_trans))
+
+# Extract edge list from network object
+edgelist <- data.frame(get.edgelist(cibola_i)) %>% setNames(c("v1","v2"))
+
+# add geometric info to the edge endpoints
+edgelist <- left_join(edgelist,coord_4326_df, by = join_by(v1==name)) %>%
+  setNames(c("v1","v2","X1","Y1"))
+edgelist <- left_join(edgelist,coord_4326_df, by = join_by(v2==name)) %>%
+  setNames(c("v1","v2","X1","Y1","X2","Y2"))
+
+# Plot original data on map
+ggmap(base_cibola, darken = 0.35) +
+  geom_segment(
+    data = edgelist,
+    aes(
+      x = X1,
+      y = Y1,
+      xend = X2,
+      yend = Y2
+    ),
+    col = "white",
+    alpha = 0.8,
+    size = 1
+  ) +
+  geom_point(
+    data = coord_4326_df,
+    aes(X, Y, col = V(cibola_i)$Region),
+    alpha = 0.8,
+    size = 5,
+    show.legend = FALSE
+  ) +
+  theme_void()
+```
+
+An alternative is that of transforming the entire graph into an sf object by assigning it a geometry.
+This can be done using sfnetwork
+```{r using sfnetwork}
+# assign geometry attribute to cibola i
+cibola_i_sf <- cibola_i
+V(cibola_i_sf)$geometry <- loc_trans$geometry
+cibola_i_sf<- as_sfnetwork(cibola_i_sf)
+
+# quick plot
+plot(cibola_i_sf)
+```
+
+
+# Exercises:
+```{r space and betweenness}
+# Create a data frame for the custom layout
+coord_df <- data.frame(
+  name = V(cibola_i)$name,
+  x = V(cibola_i)$x, 
+  y = V(cibola_i)$y)
+
+# Define layout manually
+ggraph(cibola_i, 
+       layout = "manual", 
+       x = coord_df$x,
+       y = coord_df$y) +
+  geom_edge_link(
+    color ="gray"
+  ) +
+  geom_node_point(
+    aes(size = igraph::betweenness(cibola_i),
+        color = Region)
+  ) +
+  geom_node_text(
+    aes(label = name)
+  ) + 
+  # select theme
+  theme_graph()
+```
+
+With background map
+```{r map and betweenness}
+# Cibola map, spatial layout, node network as betwenness centrality 
+# Plot original data on map
+ggmap(base_cibola, darken = 0.35) +
+  geom_segment(
+    data = edgelist,
+    aes(
+      x = X1,
+      y = Y1,
+      xend = X2,
+      yend = Y2
+    ),
+    col = "white",
+    alpha = 0.8,
+    size = 1
+  ) +
+  geom_point(
+    data = coord_4326_df,
+    aes(X, Y, col = V(cibola_i)$Region,  size = igraph::betweenness(cibola_i)),
+    alpha = 0.8,
+    show.legend = FALSE
+  ) +
+  theme_void()
+```
+
+Shortest path DOES NOT WPRK
+```{r}
+# find shortest path
+Atsinna_UG494_path <- shortest_paths(cibola_i,
+                                      from="Atsinna",
+                                      to="UG494",
+                                      output ="epath")$epath[[1]]
+
+
+# Generate edge color variable to plot the path
+edge_color <- rep("gray80", ecount(cibola_i))
+edge_color[Atsinna_UG494_path] <- "orange"
+E(cibola_i)$color <- edge_color
+
+# Define layout manually
+ggraph(cibola_i, 
+       layout = "manual", 
+       x = coord_df$x,
+       y = coord_df$y) +
+  geom_edge_link(
+    color = E(cibola_i)$color
+  ) +
+  geom_node_point(
+    aes(size = igraph::betweenness(cibola_i),
+        color = Region)
+  ) +
+  geom_node_text(
+    aes(label = name)
+  ) + 
+  # select theme
+  theme_graph()
+```
 

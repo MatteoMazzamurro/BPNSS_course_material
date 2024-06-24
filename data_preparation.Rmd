@@ -175,19 +175,13 @@ largest_component <- function(sf){
   g <- as_sfnetwork(sf, directed = FALSE)
   
   # Find the components of the graph
-  components <- components(g)
+  components <- decompose(g)
 
   # Identify the largest component
-  largest_component_id <- which.max(components$csize)
+  largest_component_id <- which.max(sapply(decompose(a), length))
 
-  # Extract the vertex ids of the largest component
-  largest_component_vertices <- which(components$membership == largest_component_id)
-
-  # Create a subgraph containing only the largest component
-  largest_component <- subgraph(g, largest_component_vertices)
-  
-  # Transform into a sf network to retain the spatial structure
-  largest_component <- as_sfnetwork(largest_component)
+  # export the largest component as an sfnetwork
+  largest_component<- components[[largest_component_id]] %>% as_sfnetwork()
   
   # return the result
   return(largest_component)
