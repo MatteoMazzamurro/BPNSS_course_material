@@ -1,0 +1,65 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Introduction 
+Through this notebook, we will learn the basics of network visualisation in R.
+
+# Preliminaries
+First of all, we list the packages we will need 
+```{r list required packages}
+required_packages <- c("igraph", "statnet", "intergraph", "vegan", "tidyverse","ggraph")
+```
+
+We install the packages that we have not installed yet
+```{r install required packages}
+packages_to_install <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(packages_to_install)) install.packages(packages_to_install)
+```
+
+Finally, we load the packages
+```{r install packages}
+invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+Here, we use the following versions of the packages:
+* igraph:     v1.4.3
+* statnet:    v2019.6
+* intergraph: v2.0.3
+* vegan:      v2.6.4
+* tidyverse   v2.0.0
+* ggraph      v2.1.0
+
+# Data 
+Load the necessary data
+```{r networks from Cibola data}
+# first, read the adjacency matrix
+cibola_adj_mat <- read.csv(file = "data/networks/Cibola_adj.csv",
+                           header = T,
+                           row.names = 1)
+
+# then read the network attributes
+cibola_attr <- read.csv(file = "data/networks/Cibola_attr.csv", header = TRUE)
+
+
+# build igraph
+cibola_i <-
+  igraph::graph_from_adjacency_matrix(as.matrix(cibola_adj_mat),
+                                      mode = "undirected")
+
+# build statnet/network
+cibola_n <- asNetwork(cibola_i)
+```
+
+# Basic plots with igraph and statnet
+Compare the behaviour of igraph and statnet
+```{r compare igraph and statnet}
+# plot together basic igraph and statnet
+par(mfrow=c(1,2))
+plot(cibola_i) # more information, less readable
+plot(cibola_n) # less information, more sensible defaults
+```
+
+Add information on 
+

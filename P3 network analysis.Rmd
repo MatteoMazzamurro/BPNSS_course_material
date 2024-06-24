@@ -1,0 +1,286 @@
+---
+title: "P3 network analysis"
+output: html_notebook
+---
+
+# Introduction 
+Through this notebook, we will learn the basics of network analysis in R.
+
+# Preliminaries
+First of all, we list the packages we will need 
+```{r list required packages}
+required_packages <- c("igraph", "statnet", "intergraph", "vegan")
+```
+
+We install the packages that we have not installed yet
+```{r install required packages}
+packages_to_install <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(packages_to_install)) install.packages(packages_to_install)
+```
+
+Finally, we load the packages
+```{r install packages}
+invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+Here, we use the following versions of the packages:
+* igraph:     v1.4.3
+* statnet:    v2019.6
+* intergraph: v2.0.3
+* vegan:      v.2.6.4
+
+# Data
+Load the necessary data
+```{r data}
+# basic networks
+example_el <- matrix(c(c("v1","v1","v2"), # these are the sources 
+               c("v2","v3","v3")),# these are the targets
+               ncol=2)
+example_g <- graph_from_edgelist(example_el, directed = TRUE)
+
+# read the city network
+city_network_p3 <- read_graph("city_network.graphml", format ="graphml") # note: it adds an id attribute
+
+# networks from Cibola data.
+# the outputs are:
+# simple_net, simple_net_noiso, directed_net, weighted net, and sim_net_i
+# read in csv data
+cibola_edgelist <-
+  read.csv(file = "data/networks/Cibola_edgelist.csv", header = TRUE)
+cibola_adj_mat <- read.csv(file = "data/networks/Cibola_adj.csv",
+                           header = T,
+                           row.names = 1)
+
+# Simple network with isolates
+simple_net <-
+  igraph::graph_from_adjacency_matrix(as.matrix(cibola_adj_mat),
+                                      mode = "undirected")
+
+# Simple network with no isolates
+simple_net_noiso <-
+  igraph::graph_from_edgelist(as.matrix(cibola_edgelist),
+                              directed = FALSE)
+
+#Create a directed network by sub-sampling edge list
+set.seed(45325)
+el2 <- cibola_edgelist[sample(seq(1, nrow(cibola_edgelist)), 125,
+                              replace = FALSE), ]
+
+directed_net <- igraph::graph_from_edgelist(as.matrix(el2),
+                                            directed = TRUE)
+
+# Create a weighted undirected network by adding column of random
+# weights to edge list
+cibola_edgelist$weight <- sample(seq(1, 4), nrow(cibola_edgelist),
+                                 replace = TRUE)
+weighted_net <-
+  igraph::graph_from_edgelist(as.matrix(cibola_edgelist[, 1:2]),
+                              directed = FALSE)
+
+E(weighted_net)$weight <- cibola_edgelist$weight
+
+# Create a similarity network using the Brainerd-Robinson metric
+cibola_clust <-
+  read.csv(file = "data/networks/Cibola_clust.csv",
+           header = TRUE,
+           row.names = 1)
+# rescale table
+clust_p <- prop.table(as.matrix(cibola_clust), margin = 1)
+# similarity matrix
+sim_mat <-
+  (2 - as.matrix(vegan::vegdist(clust_p, method = "manhattan"))) / 2
+# full network from similarity matrix
+sim_net <- network(
+  sim_mat,
+  directed = FALSE,
+  ignore.eval = FALSE,
+  names.eval = "weight"
+)
+# convert to igraph
+sim_net_i <- asIgraph(sim_net)
+```
+
+Check what they look like in simple plots
+```{r plot of loaded networks}
+# plot "original" network
+plot(simple_net, main = "Cibola network")
+
+# plot them together
+par(mfrow=c(1,2))
+set.seed(3523) # Set random seed to ensure graph layout stays the same each time.
+plot(simple_net_noiso, main = "Cibola network, no isolated")
+set.seed(3523)
+plot(weighted_net, edge.width = E(weighted_net)$weight, main ="Weighted Cibola network")
+```
+
+# Example on analysis
+First of all, find basic global measures
+```{r basic lobal measures}
+# number of nodes
+vcount(simple_net)
+vcount(simple_net_noiso)
+vcount(weighted_net)
+
+# number of edges
+ecount(simple_net)
+ecount(simple_net_noiso)
+ecount(weighted_net)
+
+# density
+graph.density(simple_net)
+graph.density(simple_net_noiso)
+graph.density(weighted_net)
+```
+
+# Exercise on paths and connectivity
+```{r paths and distances}
+# find neighbours of a node
+neighbors(simple_net, "Atsinna")
+
+# distances between specific nodes
+distances(simple_net,v="Atsinna",to="UG494")   # unweighted
+distances(weighted_net,v="Atsinna",to="UG494") # weighted
+
+# find a shortest path
+shortest_paths(simple_net,from="Atsinna",to="UG494") #unweighted (steps)
+shortest_paths(weighted_net,from="Atsinna",to="UG494") # weighted
+
+# find all shortest paths
+all_shortest_paths(simple_net,from="Atsinna",to="UG494") #unweighted (steps)
+all_shortest_paths(weighted_net,from="Atsinna",to="UG494") # weighted
+
+# find weight of edges along a shortest path from Atsinna to UG494 in the weighted network
+Atsinna_UG494_epath <- shortest_paths(weighted_net,
+                                      from="Atsinna",
+                                      to="UG494",
+                                      output ="epath")$epath[[1]]
+E(weighted_net)[Atsinna_UG494_epath]$weight
+
+# longest shortest path
+farthest_vertices(simple_net)
+farthest_vertices(weighted_net)
+
+# length of longest shortest path
+diameter(simple_net)
+diameter(weighted_net)
+
+# connectivity
+is_connected(simple_net)
+is_connected(weighted_net)
+
+# components
+decompose(simple_net)
+decompose(weighted_net)
+components(cibola_adj_mat)
+
+# cutpoints
+cutpoints(cibola_adj_mat) # simple graph
+bridges(simple_net)
+is_connected(weighted_net)
+```
+
+# Exercise on centrality
+```{r centrality}
+# degree 
+simple_net_degree <- igraph::degree(simple_net)
+weighted_net_degree <- igraph::degree(weighted_net)
+
+# strength 
+simple_net_strength <- igraph::strength(simple_net)
+weighted_net_strength <- igraph::strength(weighted_net)
+
+# betweenness
+simple_net_betweenness <- igraph::betweenness(simple_net)
+weighted_net_betweenness <- igraph::betweenness(weighted_net)
+
+# closeness
+simple_net_closeness <- igraph::closeness(simple_net)
+weighted_net_closeness <- igraph::closeness(weighted_net)
+
+# statistics dataframe
+centrality_scores <- data.frame(
+  networks = c("simple","weighted"),
+  min_degree = c(
+    min(simple_net_degree),
+    min(weighted_net_degree)
+    ),
+  max_degree = c(
+    max(simple_net_degree),
+    max(weighted_net_degree)
+    ),
+  mean_degree = c(
+    mean(simple_net_degree),
+    mean(weighted_net_degree)
+    ),
+  median_degree = c(
+    median(simple_net_degree),
+    median(weighted_net_degree)
+    ),
+  centralisation_degree = c(
+    centralization.degree(simple_net)$centralization,
+    centralization.degree(weighted_net)$centralization
+  ),
+  min_betweenness = c(
+    min(simple_net_betweenness),
+    min(weighted_net_betweenness)
+    ),
+  max_betweenness = c(
+    max(simple_net_betweenness),
+    max(weighted_net_betweenness)
+    ),
+  mean_betweenness = c(
+    mean(simple_net_betweenness),
+    mean(weighted_net_betweenness)
+    ),
+  median_betweenness = c(
+    median(simple_net_betweenness),
+    median(weighted_net_betweenness)
+    ),
+  centralisation_betweenness = c(
+    centralization.betweenness(simple_net)$centralization,
+    centralization.betweenness(weighted_net)$centralization
+  )
+)
+
+# degree distribution
+simple_net_deg_distribution <- degree_distribution(simple_net)
+hist(igraph::degree(simple_net),length(simple_net_deg_distribution))
+```
+
+
+# Exercise on communities
+```{r communities}
+# find communities
+gn <- igraph::edge.betweenness.community(simple_net) 
+wt <- igraph::cluster_walktrap(simple_net, steps = 4)
+lv <- igraph::cluster_louvain(simple_net) 
+
+#modularity
+simple_net_modularity <- data.frame(
+  method = c("Grivan-Newmann","Walktrap Algorithm", "Louvain Method"),
+  modularity = c(
+    modularity(
+      simple_net, 
+      membership = membership(gn)),
+    modularity(
+      simple_net, 
+      membership = membership(wt)),
+    modularity(
+      simple_net, 
+      membership = membership(lv))
+  )
+)
+
+# plots
+par(mfrow=c(1,3))
+set.seed(3523) # Set random seed to ensure graph layout stays the same each time.
+plot(gn, simple_net, main = "Grivan-Newmann")
+set.seed(3523)
+plot(wt, simple_net, main = "Walktrap")
+set.seed(3523)
+plot(lv, simple_net, main = "Louvain")
+
+# crossings
+igraph::crossing(lv, simple_net) 
+```
+

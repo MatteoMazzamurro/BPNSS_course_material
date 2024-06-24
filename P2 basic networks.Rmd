@@ -1,0 +1,209 @@
+---
+title: "Network data in  R"
+output: html_notebook
+---
+
+# Introduction
+In this notebook, we will learn how to create our first network in R.
+
+# Preliminaries 
+First of all, we list the packages we will need 
+```{r list required packages}
+required_packages <- c("igraph")
+```
+
+We install the packages that we have not installed yet
+```{r install required packages}
+packages_to_install <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(packages_to_install)) install.packages(packages_to_install)
+```
+
+Finally, we load the packages
+```{r install packages}
+invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+Here, we use the following versions of the packages:
+* igraph:   v1.4.3
+
+# Example on creating a basic network
+```{r}
+example_el <- matrix(c(c("v1","v1","v2"), # these are the sources 
+               c("v2","v3","v3")),# these are the targets
+               ncol=2)
+example_g <- graph_from_edgelist(example_el, directed = TRUE)
+example_al <- as_adj_edge_list(example_g)
+```
+
+# Exercise on creating a basic network 
+First of all we record the info as an edge list
+```{r edgelist}
+# record info in an edgelist
+el <- matrix(c(c("v1","v1","v2"), # these are the sources 
+               c("v2","v3","v1")),# these are the targets
+             ncol=2)
+
+# convert into a graph
+el_g <- graph_from_edgelist(el, directed = TRUE)
+V(el_g)
+E(el_g)
+
+# plot the graph
+plot(el_g)
+```
+
+Convert this into an adjacency list
+```{r adjacency edge list}
+al <- as_adj_edge_list(el_g)
+```
+
+Write network as an adjacency matrix
+```{r adjacency matrix}
+# define the adjacency matrix of the network
+am <- matrix(c(0,1,1,1,0,0,0,0,0), ncol=3, byrow=TRUE)
+rownames(am) <- c("v1","v2","v3")
+colnames(am) <- c("v1","v2","v3")
+
+# create a network from the adjacency matrix
+am_g <- graph_from_adjacency_matrix(am)
+```
+
+Check that the two networks are identical
+```{r identical graphs}
+# check that the graphs are identical
+identical_graphs(am_g,el_g)
+
+# plot them together
+par(mfrow=c(1,2))
+plot(el_g, main = "Network from the edge list")
+plot(am_g, main = "Network from the adjacency matrix")
+```
+
+Add a node v4
+```{r add a node v4}
+# add vertex to the graph
+el_2_g<- add.vertices(el_g,1,name="v4")
+# define edgelist
+el_2 <- as_edgelist(el_2_g)
+# compare with original edgelist
+all(el==el_2)
+
+# add vertex to adjacency matrix
+am_2 <- rbind(am,v4=0)
+am_2 <- cbind(am_2,v4=0)
+# create network out of it
+am_2_g <- graph_from_adjacency_matrix(am_2)
+
+# compare the modified networks
+identical_graphs(am_2_g,el_2_g)
+```
+
+# Exercise 1 on attributes
+Assign size and weight attributes
+```{r assign size and weight attributes}
+# define attribute dataframes
+node_attributes_df <- data.frame(name = c("v1","v2","v3"), size = c(10,20,30))
+edge_attributes_df <- data.frame(weight = c(1,10,1))
+
+# assign attributes
+V(am_g)$size <- node_attributes_df$size
+E(am_g)$weight <- edge_attributes_df$weight
+
+# check that they have been assigned
+vertex_attr(am_g)
+edge_attr(am_g)
+
+# plot the graph
+plot(am_g, 
+     vertex.size = V(am_g)$size,
+     edge.width = E(am_g)$weight)
+```
+
+# Exercise 2 on attributes
+Retrieve dataframe city_pop_df
+```{r define the dataframe city_pop_df}
+# define columns of the dataframe 
+city <- c("Barcelona","L'Hospitalet de Llobregat","Terrassa","Badalona")
+pop <- c(1664182,269382,223627,223166)
+lon <- c(2.176944, 2.1, 2.013, 2.246111)
+lat <- c(41.382778, 41.359722, 41.57, 41.448889)
+
+# define dataframe
+city_pop_df <- data.frame(city,pop,lon,lat)
+
+# initialise "category" column 
+city_pop_df$category <- NA
+
+# define function to associate a category to the population
+which_category <- function(x){
+  try(if(!is.numeric(x)) stop("The input must be a numerical value"))
+  if (x >= 1000000){category <- "large"}
+  else if (x < 1000000 & x>= 250000){category <- "medium"}
+  else if (x < 250000){category <- "small"}
+  return(category)
+}
+
+# assign a category to each city using the above function
+for (i in 1:nrow(city_pop_df)) {
+  city_pop_df$category[i] <- which_category(city_pop_df$pop[i])
+}
+
+# transform the column into factors
+city_pop_df$category <- factor(city_pop_df$category)
+```
+
+Create network of distances
+```{r create network of cities within a certain distance}
+# find number of cities
+n_cities <- nrow(city_pop_df)
+
+# initialise matrix of longitude differences
+lon_diff <- matrix(NA, 
+                   ncol = n_cities,
+                   nrow = n_cities)
+colnames(lon_diff) <- city_pop_df$city
+rownames(lon_diff) <- city_pop_df$city
+
+# initialise matrix of latitude differences
+lat_diff <- lon_diff
+
+# check that pairs of nodes
+for (i in 1:n_cities) {
+  for (j in 1:n_cities) {
+    lon_diff[i,j] <- abs(city_pop_df[i,"lon"]-city_pop_df[j,"lon"])
+    lat_diff[i,j] <- abs(city_pop_df[i,"lat"]-city_pop_df[j,"lat"])
+    lon_diff[i,i] <- Inf # ensure that the cities are not connected to themselves
+  }
+}
+
+# derive adj matrix
+adj_matrix <- (lat_diff<0.1) * (lon_diff<0.1)
+
+# define network out of it
+city_network <- graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+
+# assign attributes
+V(city_network)$city <- city_pop_df$city
+V(city_network)$pop <- city_pop_df$pop
+V(city_network)$lon <- city_pop_df$lon
+V(city_network)$lat <- city_pop_df$lat
+V(city_network)$category <- as.character(city_pop_df$category)
+
+
+# plot graph
+plot(city_network, 
+     vertex.size = sqrt(V(city_network)$pop/5000),
+     vertex.color = as.numeric(V(city_network)$category)+1,
+     layout = cbind(V(city_network)$lon,V(city_network)$lat)
+     )
+```
+
+Export the data
+```{r export the data}
+# save as graphml
+write_graph(city_network,"city_network.graphml",format="graphml")
+
+# read the same
+city_network_read<- read_graph("city_network.graphml", format ="graphml") # note: it adds an id attribute
+```
+
