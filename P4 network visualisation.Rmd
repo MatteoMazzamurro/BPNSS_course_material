@@ -437,9 +437,10 @@ Atsinna_UG494_path <- shortest_paths(cibola_i,
 
 
 # Generate edge color variable to plot the path
-edge_color <- rep("gray80", ecount(cibola_i))
-edge_color[Atsinna_UG494_path] <- "orange"
-E(cibola_i)$color <- edge_color
+edge_on_path <- rep(FALSE, ecount(cibola_i))
+edge_on_path[Atsinna_UG494_path] <- TRUE
+E(cibola_i)$AU_Path <- edge_on_path
+E(cibola_i)$wd <- ifelse(E(cibola_i)$AU_Path,3,1)
 
 # Define layout manually
 ggraph(cibola_i, 
@@ -447,16 +448,78 @@ ggraph(cibola_i,
        x = coord_df$x,
        y = coord_df$y) +
   geom_edge_link(
-    color = E(cibola_i)$color
+    aes(color = AU_Path, width = wd)
   ) +
+  scale_fill_brewer(palette = "Set3") +
   geom_node_point(
-    aes(size = igraph::betweenness(cibola_i),
-        color = Region)
+    aes(size = igraph::betweenness(cibola_i))
   ) +
   geom_node_text(
-    aes(label = name)
+    aes(label = name),  size = 3, repel = T
   ) + 
   # select theme
-  theme_graph()
+  theme_graph() +
+  theme(legend.position = "none")
+```
+
+City network with map 
+```{r city network}
+# download stadiamap
+base_city_map <- get_stadiamap(
+  bbox = c(1.9, 41.3, 2.3, 41.6),
+  zoom = 10,
+  maptype = "stamen_terrain_background",
+  color = "bw"
+)
+
+# extract info on city locations
+city_coord_df <- as.data.frame(vertex_attr(city_network_p3)[c("name","lon","lat")])
+
+# Extract edge list from network object
+city_edgelist <- data.frame(get.edgelist(city_network_p3)) %>% setNames(c("v1","v2"))
+
+# add geometric info to the edge endpoints
+city_edgelist <- left_join(city_edgelist,city_coord_df, by = join_by(v1==name)) %>%
+  setNames(c("v1","v2","X1","Y1"))
+city_edgelist <- left_join(city_edgelist,city_coord_df, by = join_by(v2==name)) %>%
+  setNames(c("v1","v2","X1","Y1","X2","Y2"))
+
+# Plot original data on map
+ggmap(base_city_map, darken = 0.35) +
+  geom_segment(
+    data = city_edgelist,
+    aes(
+      x = X1,
+      y = Y1,
+      xend = X2,
+      yend = Y2
+    ),
+    col = "white",
+    alpha = 0.8,
+    size = 1
+  ) +
+  geom_point(
+    data = city_coord_df,
+    aes(lon, lat, col = V(city_network_p3)$category, size = V(city_network_p3)$pop),
+    alpha = 0.8,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = city_coord_df,
+    aes(label = name)
+  ) +
+  theme_void()
+
+```
+
+
+FIRST ATTEMPT TO CONVERT TO MATRIX LAYOUT
+
+```{r}
+ggraph(cibola_i, 'matrix') + 
+  geom_edge_point(mirror = TRUE) + 
+  #geom_node_text(aes(label = name), size = 3, nudge_x = 0.2, nudge_y = 0.2) +
+  theme_minimal() +
+  coord_fixed()
 ```
 
