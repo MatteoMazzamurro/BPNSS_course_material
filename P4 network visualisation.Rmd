@@ -55,6 +55,9 @@ Here, we use the following versions of the packages:
 This code was written in R 4.3.0
 
 # Data 
+Before starting, please download the Cibola data from the Online Companion website https://book.archnetworks.net/dataandworkspace#Cibola
+Place the data in the folder "data" within your project.
+
 Load the necessary data
 ```{r networks from Cibola data}
 # first, read the adjacency matrix

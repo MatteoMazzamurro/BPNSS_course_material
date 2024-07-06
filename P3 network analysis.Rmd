@@ -75,6 +75,9 @@ plot(example_g)
 ```
 
 # Data
+Before starting, please download the Cibola data from the Online Companion website https://book.archnetworks.net/dataandworkspace#Cibola
+Place the data in the folder "data" within your project.
+
 Load the necessary data. Note that the paths point to a data folder contained
 within the working directory of the project. If the data is located elsewhere,
 you will need to specify the correct path.
