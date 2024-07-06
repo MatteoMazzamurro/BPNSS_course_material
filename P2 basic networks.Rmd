@@ -4,15 +4,15 @@ output: html_notebook
 ---
 
 # Introduction
-In this notebook, we will learn how to create our first network in R.
+This notebook accompanies the second practical P2 of the Barcelona Past Networks Summer School. It shows how to create basic network in R.
 
 # Preliminaries 
-First of all, we list the packages we will need 
+For this network we will need the package igraph.
 ```{r list required packages}
 required_packages <- c("igraph")
 ```
 
-We install the packages that we have not installed yet
+We install the packages that we have not installed yet.
 ```{r install required packages}
 packages_to_install <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 if(length(packages_to_install)) install.packages(packages_to_install)
@@ -26,14 +26,7 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 Here, we use the following versions of the packages:
 * igraph:   v1.4.3
 
-# Example on creating a basic network
-```{r}
-example_el <- matrix(c(c("v1","v1","v2"), # these are the sources 
-               c("v2","v3","v3")),# these are the targets
-               ncol=2)
-example_g <- graph_from_edgelist(example_el, directed = TRUE)
-example_al <- as_adj_edge_list(example_g)
-```
+We also use R version 4.3.0
 
 # Exercise on creating a basic network 
 First of all we record the info as an edge list
@@ -45,8 +38,8 @@ el <- matrix(c(c("v1","v1","v2"), # these are the sources
 
 # convert into a graph
 el_g <- graph_from_edgelist(el, directed = TRUE)
-V(el_g)
-E(el_g)
+V(el_g) # view the nodes
+E(el_g) # view the edges
 
 # plot the graph
 plot(el_g)
@@ -57,10 +50,10 @@ Convert this into an adjacency list
 al <- as_adj_edge_list(el_g)
 ```
 
-Write network as an adjacency matrix
+Write the network as an adjacency matrix
 ```{r adjacency matrix}
 # define the adjacency matrix of the network
-am <- matrix(c(0,1,1,1,0,0,0,0,0), ncol=3, byrow=TRUE)
+am <- matrix(c(0,1,1,1,0,0,0,0,0), ncol = 3, byrow = TRUE)
 rownames(am) <- c("v1","v2","v3")
 colnames(am) <- c("v1","v2","v3")
 
@@ -72,7 +65,10 @@ Check that the two networks are identical
 ```{r identical graphs}
 # check that the graphs are identical
 identical_graphs(am_g,el_g)
+```
 
+Plot the two networks one next to the other for a visual confirmation
+```{r plot identical graphs together}
 # plot them together
 par(mfrow=c(1,2))
 plot(el_g, main = "Network from the edge list")
@@ -152,7 +148,7 @@ for (i in 1:nrow(city_pop_df)) {
 city_pop_df$category <- factor(city_pop_df$category)
 ```
 
-Create network of distances
+Create network of cities based on distances
 ```{r create network of cities within a certain distance}
 # find number of cities
 n_cities <- nrow(city_pop_df)
@@ -189,8 +185,7 @@ V(city_network)$lon <- city_pop_df$lon
 V(city_network)$lat <- city_pop_df$lat
 V(city_network)$category <- as.character(city_pop_df$category)
 
-
-# plot graph
+# plot the network
 plot(city_network, 
      vertex.size = sqrt(V(city_network)$pop/5000),
      vertex.color = as.numeric(V(city_network)$category)+1,
@@ -201,9 +196,10 @@ plot(city_network,
 Export the data
 ```{r export the data}
 # save as graphml
-write_graph(city_network,"city_network.graphml",format="graphml")
+write_graph(city_network,
+            "city_network.graphml", #this saves the network in your working directory.
+            format="graphml")
 
 # read the same
 city_network_read<- read_graph("city_network.graphml", format ="graphml") # note: it adds an id attribute
 ```
-

@@ -5,6 +5,12 @@ output: html_notebook
 
 # Introduction 
 Through this notebook, we will learn the basics of network visualisation in R.
+It complements the Practical P4 in the Barcelona Past Networks Summer School.
+The notebook is largely based on Chapter 6 of
+
+Peeples, Matthew A. and Tom Brughmans (2023). 
+Online Companion to Network Science in Archaeology. 
+https://archnetworks.net, Accessed 2024-03-07. 
 
 # Preliminaries
 First of all, we list the packages we will need 
@@ -12,13 +18,13 @@ First of all, we list the packages we will need
 required_packages <- c("igraph", 
                        "statnet", 
                        "intergraph", 
-                       #"vegan", 
                        "tidyverse",
                        "ggraph",
                        "ggforce",     # convex hull
                        "concaveman",  # convex hull
                        "sf",
-                       "ggmap"
+                       "ggmap",
+                       "sfnetwork"
                        )
 ```
 
@@ -44,17 +50,20 @@ Here, we use the following versions of the packages:
 * concaveman: v1.1.0
 * sf:         v1.0.16
 * ggmap:      v4.0.0
+* sfnetwork:  v0.6.3
+
+This code was written in R 4.3.0
 
 # Data 
 Load the necessary data
 ```{r networks from Cibola data}
 # first, read the adjacency matrix
-cibola_adj_mat <- read.csv(file = "data/networks/Cibola_adj.csv",
+cibola_adj_mat <- read.csv(file = "data/Cibola_adj.csv",
                            header = T,
                            row.names = 1)
 
 # then read the network attributes
-cibola_attr <- read.csv(file = "data/networks/Cibola_attr.csv", header = TRUE)
+cibola_attr <- read.csv(file = "data/Cibola_attr.csv", header = TRUE)
 
 
 # build igraph
@@ -80,7 +89,7 @@ plot(cibola_i, main ="Cibola, igraph default") # more information, less readable
 plot(cibola_n, main ="Cibola, statnet default") # less information, more sensible defaults
 ```
 
-Fairly similar visualisation techniques
+Fairly similar visualisation tools.
 ```{r visuals with igraph and statnet}
 # plot them together
 par(mfrow=c(1,2))
@@ -110,9 +119,7 @@ ggraph(cibola_i) +
   # add edges
   geom_edge_link() +
   # add nodes
-  geom_node_point() +
-  # select theme
-  theme_graph()
+  geom_node_point()
 ```  
 
 Remark: easy to show only edges/nodes
@@ -241,12 +248,22 @@ ggraph(cibola_i,
   theme_graph()
 ```
 
-It is also possible to define a layout interactively
-```{r layout interactive}
+It is also possible to define a layout interactively.
+First open the interactive layout (it will open a new window. 
+```{r define layout interactively}
 # uses tkplot in igraph
 tkid <- tkplot(cibola_i) #tkid is the id of the tkplot that will open
-l <- tkplot.getcoords(tkid) # grab the coordinates from tkplot
+```
 
+Once you are happy, grab the coordinates of the layout
+```{r grab coordinates}
+l <- tkplot.getcoords(tkid) # grab the coordinates from tkplot
+```
+
+Then close the window.
+
+Finally, we are ready to use the layout in the plot
+```{r plots with modified layout}
 # plot using igraph
 plot(cibola_i, layout=l)
 
@@ -272,9 +289,6 @@ ggraph(cibola_i,
 ## Hulls and maps
 We have seen how the plot function with igraph and statnet allows to visualise a convex hull around nodes to identify them as part of a cluster. The same can be done with ggplot
 ```{r hull}
-#library(ggforce)
-#library(concaveman)
-
 # identify the clusters
 grp <- as.factor(cluster_louvain(cibola_i)$membership)
 
@@ -312,7 +326,8 @@ For some cases, a terrain is best. This can be done via stadiamap.
 Annoyingly, then one needs to add nodes and links as points and segments on the map.
 ```{r terrain map with stadiamap}
 # need to register stadiamaps beforehand (see tutorial)
-ggmap::register_stadiamaps("72639591-13c1-46a8-b58d-86318dbbe614")
+# ggmap::register_stadiamaps("HERE YOUR REGISTRATION CODE") # insert your registration code in the function
+# ggmap::register_stadiamaps("72639591-13c1-46a8-b58d-86318dbbe614")
 
 # download stadiamap
 base_cibola <- get_stadiamap(
@@ -427,39 +442,69 @@ ggmap(base_cibola, darken = 0.35) +
   theme_void()
 ```
 
-Shortest path DOES NOT WPRK
-```{r}
+```{r shortest path}
 # find shortest path
 Atsinna_UG494_path <- shortest_paths(cibola_i,
                                       from="Atsinna",
                                       to="UG494",
-                                      output ="epath")$epath[[1]]
+                                      output ="vpath")$vpath[[1]]
 
+# transform into a df
+Atsinna_UG494_path_df <- data.frame(v1 = Atsinna_UG494_path$name[1:3],
+                                    v2 = Atsinna_UG494_path$name[2:4]) 
 
-# Generate edge color variable to plot the path
-edge_on_path <- rep(FALSE, ecount(cibola_i))
-edge_on_path[Atsinna_UG494_path] <- TRUE
-E(cibola_i)$AU_Path <- edge_on_path
-E(cibola_i)$wd <- ifelse(E(cibola_i)$AU_Path,3,1)
+# add geometric info to the edge endpoints
+Atsinna_UG494_path_df <- left_join(Atsinna_UG494_path_df,coord_4326_df, by = join_by(v1==name)) %>%
+  setNames(c("v1","v2","X1","Y1"))
+Atsinna_UG494_path_df <- left_join(Atsinna_UG494_path_df,coord_4326_df, by = join_by(v2==name)) %>%
+  setNames(c("v1","v2","X1","Y1","X2","Y2"))
 
-# Define layout manually
-ggraph(cibola_i, 
-       layout = "manual", 
-       x = coord_df$x,
-       y = coord_df$y) +
-  geom_edge_link(
-    aes(color = AU_Path, width = wd)
+# Cibola map, spatial layout, node network as betwenness centrality 
+# Plot original data on map
+ggmap(base_cibola, darken = 0.35) +
+  # add edges
+  geom_segment(
+    data = edgelist,
+    aes(
+      x = X1,
+      y = Y1,
+      xend = X2,
+      yend = Y2
+    ),
+    col = "white",
+    alpha = 0.8,
+    size = 1
   ) +
-  scale_fill_brewer(palette = "Set3") +
-  geom_node_point(
-    aes(size = igraph::betweenness(cibola_i))
+  # add red segments to highlight the edges along the shortest path
+  geom_segment(
+    data = Atsinna_UG494_path_df,
+    aes(
+      x = X1,
+      y = Y1,
+      xend = X2,
+      yend = Y2
+    ),
+    col = "red",
+    alpha = 1,
+    size = 1
   ) +
-  geom_node_text(
-    aes(label = name),  size = 3, repel = T
-  ) + 
-  # select theme
-  theme_graph() +
-  theme(legend.position = "none")
+  # add nodes with colours depending on the region and size depending on betweenness centrality
+  geom_point(
+    data = coord_4326_df,
+    aes(X, Y, col = V(cibola_i)$Region,  size = igraph::betweenness(cibola_i)),
+    alpha = 0.8,
+    show.legend = FALSE
+  ) +
+  # add labels of locations along the path
+  geom_label(
+    data = coord_4326_df[coord_4326_df$name %in%  Atsinna_UG494_path$name,],
+    aes(X, Y, label = name),
+    alpha = 1
+  ) +
+  # use a minimalistic theme
+  theme_void() +
+  # add title 
+  labs(title = "Shortest path between Atsinna and UG494")
 ```
 
 City network with map 
@@ -506,20 +551,7 @@ ggmap(base_city_map, darken = 0.35) +
   ) +
   geom_text(
     data = city_coord_df,
-    aes(label = name)
+    aes(label = name),
   ) +
   theme_void()
-
 ```
-
-
-FIRST ATTEMPT TO CONVERT TO MATRIX LAYOUT
-
-```{r}
-ggraph(cibola_i, 'matrix') + 
-  geom_edge_point(mirror = TRUE) + 
-  #geom_node_text(aes(label = name), size = 3, nudge_x = 0.2, nudge_y = 0.2) +
-  theme_minimal() +
-  coord_fixed()
-```
-

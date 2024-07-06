@@ -4,12 +4,22 @@ output: html_notebook
 ---
 
 # Introduction 
-Through this notebook, we will learn the basics of network analysis in R.
+Through this notebook, we will learn the basics of network analysis in R. 
+It complements the Practical P3 in the Barcelona Past Networks Summer School.
+The notebook is largely based on Chapter 4 of
+
+Peeples, Matthew A. and Tom Brughmans (2023). 
+Online Companion to Network Science in Archaeology. 
+https://archnetworks.net, Accessed 2024-03-07. 
 
 # Preliminaries
-First of all, we list the packages we will need 
+First of all, we list the packages we will need:
 ```{r list required packages}
-required_packages <- c("igraph", "statnet", "intergraph", "vegan")
+required_packages <- c("igraph", 
+                       "statnet", 
+                       "intergraph", 
+                       "vegan", 
+                       "sna")
 ```
 
 We install the packages that we have not installed yet
@@ -27,77 +37,78 @@ Here, we use the following versions of the packages:
 * igraph:     v1.4.3
 * statnet:    v2019.6
 * intergraph: v2.0.3
-* vegan:      v.2.6.4
+* vegan:      v2.6.4
+* sna:        v2.7.1
 
-# Data
-Load the necessary data
-```{r data}
-# basic networks
-example_el <- matrix(c(c("v1","v1","v2"), # these are the sources 
-               c("v2","v3","v3")),# these are the targets
-               ncol=2)
+This code was written in R 4.3.0
+
+# Basics 
+```{r Handle basic networks}
+# define edge list matrix
+example_el <- matrix(c("v1","v1","v2", # these are the sources 
+                       "v2","v3","v3"),# these are the targets 
+                     ncol=2)
+
+# build network from edgelist
 example_g <- graph_from_edgelist(example_el, directed = TRUE)
 
-# read the city network
-city_network_p3 <- read_graph("city_network.graphml", format ="graphml") # note: it adds an id attribute
+# plot
+plot(example_g)
 
-# networks from Cibola data.
-# the outputs are:
-# simple_net, simple_net_noiso, directed_net, weighted net, and sim_net_i
-# read in csv data
-cibola_edgelist <-
-  read.csv(file = "data/networks/Cibola_edgelist.csv", header = TRUE)
-cibola_adj_mat <- read.csv(file = "data/networks/Cibola_adj.csv",
+# access vertices/nodes
+V(example_g)
+
+# access edges
+E(example_g)
+
+# add labels to edges
+E(example_g)$label <- c("A","B","C")
+
+# add size attributes to node
+V(example_g)$size <- c(10,20,30)
+
+# view vertex attributes now
+vertex.attributes(example_g)
+
+# the basic plot function automatically interprets the size and label attributes
+plot(example_g)
+```
+
+# Data
+Load the necessary data. Note that the paths point to a data folder contained
+within the working directory of the project. If the data is located elsewhere,
+you will need to specify the correct path.
+
+```{r data}
+# simple net
+cibola_adj_mat <- read.csv(file = "data/Cibola_adj.csv", # path to the data 
                            header = T,
                            row.names = 1)
 
 # Simple network with isolates
 simple_net <-
-  igraph::graph_from_adjacency_matrix(as.matrix(cibola_adj_mat),
-                                      mode = "undirected")
+  graph_from_adjacency_matrix(
+    as.matrix(cibola_adj_mat),
+    mode = "undirected")
 
-# Simple network with no isolates
-simple_net_noiso <-
-  igraph::graph_from_edgelist(as.matrix(cibola_edgelist),
-                              directed = FALSE)
-
-#Create a directed network by sub-sampling edge list
-set.seed(45325)
-el2 <- cibola_edgelist[sample(seq(1, nrow(cibola_edgelist)), 125,
-                              replace = FALSE), ]
-
-directed_net <- igraph::graph_from_edgelist(as.matrix(el2),
-                                            directed = TRUE)
+# weighted net
+cibola_edgelist <-
+  read.csv(file = "data/Cibola_edgelist.csv", header = TRUE)
 
 # Create a weighted undirected network by adding column of random
 # weights to edge list
-cibola_edgelist$weight <- sample(seq(1, 4), nrow(cibola_edgelist),
-                                 replace = TRUE)
+cibola_edgelist$weight <- sample(
+  seq(1, 4),
+  nrow(cibola_edgelist),
+  replace = TRUE)
+
+# initialise network
 weighted_net <-
   igraph::graph_from_edgelist(as.matrix(cibola_edgelist[, 1:2]),
                               directed = FALSE)
 
+# assign weights to network
 E(weighted_net)$weight <- cibola_edgelist$weight
-
-# Create a similarity network using the Brainerd-Robinson metric
-cibola_clust <-
-  read.csv(file = "data/networks/Cibola_clust.csv",
-           header = TRUE,
-           row.names = 1)
-# rescale table
-clust_p <- prop.table(as.matrix(cibola_clust), margin = 1)
-# similarity matrix
-sim_mat <-
-  (2 - as.matrix(vegan::vegdist(clust_p, method = "manhattan"))) / 2
-# full network from similarity matrix
-sim_net <- network(
-  sim_mat,
-  directed = FALSE,
-  ignore.eval = FALSE,
-  names.eval = "weight"
-)
-# convert to igraph
-sim_net_i <- asIgraph(sim_net)
 ```
 
 Check what they look like in simple plots
@@ -108,27 +119,27 @@ plot(simple_net, main = "Cibola network")
 # plot them together
 par(mfrow=c(1,2))
 set.seed(3523) # Set random seed to ensure graph layout stays the same each time.
-plot(simple_net_noiso, main = "Cibola network, no isolated")
+plot(simple_net, main = "Cibola network, simple net")
 set.seed(3523)
 plot(weighted_net, edge.width = E(weighted_net)$weight, main ="Weighted Cibola network")
 ```
+Remark that simple_net contains an isolated node that does not appear in weighted_net.
+This is because weighted_net is created from an edgelist, a network data format
+that does not retain information on isolated nodes.
 
 # Example on analysis
 First of all, find basic global measures
 ```{r basic lobal measures}
 # number of nodes
 vcount(simple_net)
-vcount(simple_net_noiso)
 vcount(weighted_net)
 
 # number of edges
 ecount(simple_net)
-ecount(simple_net_noiso)
 ecount(weighted_net)
 
 # density
 graph.density(simple_net)
-graph.density(simple_net_noiso)
 graph.density(weighted_net)
 ```
 
@@ -165,18 +176,23 @@ diameter(simple_net)
 diameter(weighted_net)
 
 # connectivity
-is_connected(simple_net)
+is_connected(simple_net) #simple_net is based on the contains 
 is_connected(weighted_net)
 
 # components
 decompose(simple_net)
 decompose(weighted_net)
-components(cibola_adj_mat)
+
+# number of components
+length(decompose(simple_net))
+components(cibola_adj_mat) # dedicated function in sna, requires the adjacency matrix
+
+# bridges
+bridges(simple_net)
+bridges(weighted_net)
 
 # cutpoints
-cutpoints(cibola_adj_mat) # simple graph
-bridges(simple_net)
-is_connected(weighted_net)
+cutpoints(cibola_adj_mat) # dedicated function in sna, requires the adjacency matrix
 ```
 
 # Exercise on centrality
@@ -244,9 +260,12 @@ centrality_scores <- data.frame(
 
 # degree distribution
 simple_net_deg_distribution <- degree_distribution(simple_net)
-hist(igraph::degree(simple_net),length(simple_net_deg_distribution))
+hist(simple_net_degree,
+     breaks = seq(-0.5, length(simple_net_deg_distribution)+0.5, by=1),
+     main="Degree distribution in simple-net",
+     xlab="degree",
+     ylab="occurrences")
 ```
-
 
 # Exercise on communities
 ```{r communities}

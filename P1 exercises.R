@@ -1,4 +1,18 @@
-# Solution to exercise 1 P1
+# Exercise in P1: Introduction to R
+
+################################################################################
+
+# Topics: dataframes, data types, functions, conditional statements, plots
+
+################################################################################
+
+# This script was written in R v 4.3.0
+# to verify your R version, uncomment and run the following line:
+# R.version
+
+################################################################################
+
+# Solution
 
 # define columns of the dataframe 
 city <- c("Barcelona","L'Hospitalet de Llobregat","Terrassa","Badalona")
