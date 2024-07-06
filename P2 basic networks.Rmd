@@ -197,9 +197,6 @@ Export the data
 ```{r export the data}
 # save as graphml
 write_graph(city_network,
-            "city_network.graphml", #this saves the network in your working directory.
+            "data/city_network.graphml", #this saves the network in your working directory.
             format="graphml")
-
-# read the same
-city_network_read<- read_graph("city_network.graphml", format ="graphml") # note: it adds an id attribute
 ```

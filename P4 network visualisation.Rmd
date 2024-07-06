@@ -517,11 +517,14 @@ base_city_map <- get_stadiamap(
   color = "bw"
 )
 
+# read the same
+city_network_p2<- read_graph("data/city_network.graphml", format ="graphml") # note: it adds an id attribute
+
 # extract info on city locations
-city_coord_df <- as.data.frame(vertex_attr(city_network_p3)[c("name","lon","lat")])
+city_coord_df <- as.data.frame(vertex_attr(city_network_p2)[c("name","lon","lat")])
 
 # Extract edge list from network object
-city_edgelist <- data.frame(get.edgelist(city_network_p3)) %>% setNames(c("v1","v2"))
+city_edgelist <- data.frame(get.edgelist(city_network_p2)) %>% setNames(c("v1","v2"))
 
 # add geometric info to the edge endpoints
 city_edgelist <- left_join(city_edgelist,city_coord_df, by = join_by(v1==name)) %>%
@@ -545,7 +548,7 @@ ggmap(base_city_map, darken = 0.35) +
   ) +
   geom_point(
     data = city_coord_df,
-    aes(lon, lat, col = V(city_network_p3)$category, size = V(city_network_p3)$pop),
+    aes(lon, lat, col = V(city_network_p2)$category, size = V(city_network_p2)$pop),
     alpha = 0.8,
     show.legend = FALSE
   ) +
