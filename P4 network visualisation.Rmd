@@ -330,7 +330,6 @@ Annoyingly, then one needs to add nodes and links as points and segments on the 
 ```{r terrain map with stadiamap}
 # need to register stadiamaps beforehand (see tutorial)
 # ggmap::register_stadiamaps("HERE YOUR REGISTRATION CODE") # insert your registration code in the function
-# ggmap::register_stadiamaps("72639591-13c1-46a8-b58d-86318dbbe614")
 
 # download stadiamap
 base_cibola <- get_stadiamap(
